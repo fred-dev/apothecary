@@ -7,7 +7,7 @@
 # uses an autotools build system,
 # specify specfic build configs in poco/config using ./configure --config=NAME
 
-FORMULA_TYPES=("osx" "vs" "linux")
+FORMULA_TYPES=("osx" "ios" "tvos" "watchos" "xros" "catos" "vs" "linux")
 FORMULA_DEPENDS=("openssl" "zlib" )
 
 # define the version
@@ -64,13 +64,19 @@ function prepare() {
     apothecaryDepend copy openssl
 
     # make backups of the ios config files since we need to edit them
-    if [[ "$TYPE" == "ios" || "$TYPE" == "tvos" ]]; then
+    if [[ "$TYPE" == "ios" || "$TYPE" == "tvos" || "$TYPE" == "watchos" ]]; then
         mkdir -p lib/$TYPE
         mkdir -p lib/iPhoneOS
 
         if [[ "$TYPE" == "tvos" ]]; then
             cp $FORMULA_DIR/AppleTV build/config/AppleTV
             cp $FORMULA_DIR/AppleTVSimulator build/config/AppleTVSimulator
+        elif [[ "$TYPE" == "watchos" ]]; then
+            cp $FORMULA_DIR/WatchOS build/config/WatchOS
+            cp $FORMULA_DIR/WatchSimulator build/config/WatchSimulator
+        elif [[ "$TYPE" == "ios" ]]; then
+            cp $FORMULA_DIR/iPhone build/config/iPhone
+            cp $FORMULA_DIR/iPhoneSimulator build/config/iPhoneSimulator
         fi
 
         # fix using sed i686 reference and allow overloading variable
@@ -140,11 +146,23 @@ function build() {
             -DCMAKE_C_STANDARD=${C_STANDARD} \
             -DCMAKE_CXX_STANDARD=${CPP_STANDARD} \
             -DCMAKE_CXX_STANDARD_REQUIRED=ON \
-            -DCMAKE_CXX_EXTENSIONS=OFF
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            -DCMAKE_CXX_FLAGS=\"-std=c++${CPP_STANDARD}\" \
+            -DCMAKE_C_FLAGS=\"-std=c${C_STANDARD}\" \
             -DBUILD_SHARED_LIBS=OFF \
             -DCMAKE_INSTALL_PREFIX=Release \
             -DCMAKE_INCLUDE_OUTPUT_DIRECTORY=include \
             -DCMAKE_INSTALL_INCLUDEDIR=include"
+        
+        # Disable ActiveRecordCompiler for Apple platforms to avoid bundle identifier issues
+        # Enable POCO_NO_FORK_EXEC for watchOS and tvOS to avoid fork/exec issues
+        if [[ "$TYPE" == "watchos" ]]; then
+            DEFINES="${DEFINES} -DENABLE_ACTIVERECORD_COMPILER=OFF -DPOCO_NO_FORK_EXEC=ON"
+        elif [[ "$TYPE" == "tvos" ]]; then
+            DEFINES="${DEFINES} -DENABLE_ACTIVERECORD_COMPILER=OFF -DPOCO_NO_FORK_EXEC=ON"
+        elif [[ "$TYPE" == "ios" || "$TYPE" == "xros" || "$TYPE" == "catos" ]]; then
+            DEFINES="${DEFINES} -DENABLE_ACTIVERECORD_COMPILER=OFF"
+        fi
         cmake .. ${DEFINES} \
             -DCMAKE_TOOLCHAIN_FILE=$APOTHECARY_DIR/toolchains/ios.toolchain.cmake \
             -DPLATFORM=$PLATFORM \
